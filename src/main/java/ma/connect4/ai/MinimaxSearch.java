@@ -1,13 +1,13 @@
-
 package ma.connect4.ai;
 
 /**
- * Standard Minimax search without pruning.
+ * Minimax classique, sans élagage : explore tous les nœuds
+ * jusqu'à la profondeur demandée.
  */
-public final class MinimaxSearch extends GameSearch {
+public final class MinimaxSearch extends Connect4Search {
 
     public MinimaxSearch() {
-        super(false);
+        super(false);   // false = pas de coupure alpha-bêta
     }
 
     @Override

@@ -1,13 +1,13 @@
-
 package ma.connect4.ai;
 
 /**
- * Minimax search optimized with Alpha-Beta pruning.
+ * Minimax avec élagage Alpha-Bêta : même résultat que Minimax,
+ * mais en explorant beaucoup moins de nœuds.
  */
-public final class AlphaBetaSearch extends GameSearch {
+public final class AlphaBetaSearch extends Connect4Search {
 
     public AlphaBetaSearch() {
-        super(true);
+        super(true);    // true = coupures alpha-bêta actives
     }
 
     @Override
