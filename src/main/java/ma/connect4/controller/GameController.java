@@ -14,32 +14,46 @@ import ma.connect4.model.Move;
 import java.util.Objects;
 
 /**
- * Coordinates the game engine, artificial intelligence
- * and player actions.
+ * Chef d'orchestre de la partie : relie le moteur de jeu, l'intelligence
+ * artificielle et les actions du joueur.
+ *
+ * Elle applique les règles propres à l'application : tour de la machine,
+ * nombre d'aides limité, réglages de la partie. L'interface graphique ne parle
+ * qu'à cette classe.
  */
 public final class GameController {
 
+    // Moteur de jeu (grille, tour, fin de partie).
     private final GameEngine gameEngine;
 
+    // Réglages de la partie en cours (null tant qu'aucune partie n'est lancée).
     private GameConfig gameConfig;
 
+    // Algorithme de la machine et algorithme des aides (peuvent être différents).
     private SearchStrategy computerStrategy;
     private SearchStrategy helpStrategy;
 
+    // Nombre d'aides encore disponibles.
     private int hintsRemaining;
 
+    /**
+     * Crée un contrôleur. Il faut appeler {@link #startNewGame} avant de jouer.
+     */
     public GameController() {
         this.gameEngine = new GameEngine();
     }
 
     /**
-     * Starts a new game using the selected configuration.
+     * Démarre une nouvelle partie avec les réglages choisis.
+     *
+     * @param config les réglages (mode, stratégies, profondeur, nombre d'aides)
      */
     public void startNewGame(GameConfig config) {
         Objects.requireNonNull(config, "Game configuration cannot be null");
 
         this.gameConfig = config;
 
+        // Création des deux algorithmes selon les réglages.
         this.computerStrategy = createStrategy(
                 config.computerStrategy()
         );
@@ -48,13 +62,18 @@ public final class GameController {
                 config.helpStrategy()
         );
 
+        // Les aides sont remises au maximum à chaque nouvelle partie.
         this.hintsRemaining = config.maxHints();
 
         gameEngine.reset();
     }
 
     /**
-     * Plays a move made by a human player.
+     * Joue le coup d'un joueur humain.
+     *
+     * @throws IllegalStateException    si aucune partie n'est lancée, si elle est finie,
+     *                                  ou si c'est le tour de la machine
+     * @throws IllegalArgumentException si le coup est interdit (colonne pleine)
      */
     public GameState playHumanMove(Move move) {
         ensureGameStarted();
@@ -63,6 +82,8 @@ public final class GameController {
             throw new IllegalStateException("The game is already finished");
         }
 
+        // Contre la machine : l'humain joue le rouge, la machine joue le jaune.
+        // On refuse donc un coup humain pendant le tour du jaune.
         if (gameConfig.mode() == GameConfig.GameMode.HUMAN_VS_COMPUTER
                 && gameEngine.getCurrentPlayer() == Disc.YELLOW) {
             throw new IllegalStateException(
@@ -74,7 +95,10 @@ public final class GameController {
     }
 
     /**
-     * Plays the computer's move.
+     * Fait jouer la machine (jaune) : cherche son meilleur coup puis le joue.
+     *
+     * @return le résultat de la recherche (coup, score, nombre de nœuds explorés, durée)
+     * @throws IllegalStateException si ce n'est pas le tour de la machine ou si la partie est finie
      */
     public SearchResult playComputerMove() {
         ensureGameStarted();
@@ -95,6 +119,7 @@ public final class GameController {
             );
         }
 
+        // La machine cherche son meilleur coup avec la profondeur choisie (= difficulté).
         SearchResult result = computerStrategy.findBestMove(
                 gameEngine.getBoard(),
                 Disc.YELLOW,
@@ -113,7 +138,13 @@ public final class GameController {
     }
 
     /**
-     * Calculates a hint without changing the game board.
+     * Calcule une aide (le meilleur coup suggéré) sans modifier la grille.
+     *
+     * Chaque aide demandée consomme une des aides autorisées. L'aide est calculée
+     * pour le joueur dont c'est le tour, avec la stratégie d'aide choisie.
+     *
+     * @return le coup conseillé
+     * @throws IllegalStateException s'il ne reste plus d'aide ou si la partie est finie
      */
     public Move getHint() {
         ensureGameStarted();
@@ -130,6 +161,7 @@ public final class GameController {
             );
         }
 
+        // Même recherche que pour la machine, mais pour le joueur courant et sans jouer le coup.
         SearchResult result = helpStrategy.findBestMove(
                 gameEngine.getBoard(),
                 gameEngine.getCurrentPlayer(),
@@ -142,13 +174,14 @@ public final class GameController {
             );
         }
 
+        // Une aide n'est décomptée que si elle a bien été calculée.
         hintsRemaining--;
 
         return result.bestMove();
     }
 
     /**
-     * Resets the current game while keeping its configuration.
+     * Recommence la partie en gardant les mêmes réglages (les aides sont restaurées).
      */
     public void restartGame() {
         ensureGameStarted();
@@ -158,7 +191,7 @@ public final class GameController {
     }
 
     /**
-     * Creates the requested AI search strategy.
+     * Crée l'algorithme de recherche correspondant au choix de l'utilisateur.
      */
     private SearchStrategy createStrategy(
             GameConfig.SearchStrategyType strategyType) {
@@ -169,6 +202,9 @@ public final class GameController {
         };
     }
 
+    /**
+     * Refuse toute action tant qu'aucune partie n'a été lancée.
+     */
     private void ensureGameStarted() {
         if (gameConfig == null) {
             throw new IllegalStateException(
@@ -177,26 +213,44 @@ public final class GameController {
         }
     }
 
+    /**
+     * Moteur de jeu (utilisé par la vue pour afficher la grille et sauvegarder).
+     */
     public GameEngine getGameEngine() {
         return gameEngine;
     }
 
+    /**
+     * Réglages de la partie en cours.
+     */
     public GameConfig getGameConfig() {
         return gameConfig;
     }
 
+    /**
+     * Nombre d'aides restantes.
+     */
     public int getHintsRemaining() {
         return hintsRemaining;
     }
 
+    /**
+     * Vrai si la partie est terminée.
+     */
     public boolean isGameFinished() {
         return gameEngine.isFinished();
     }
 
+    /**
+     * État actuel de la partie.
+     */
     public GameState getGameState() {
         return gameEngine.getGameState();
     }
 
+    /**
+     * Joueur dont c'est le tour.
+     */
     public Disc getCurrentPlayer() {
         return gameEngine.getCurrentPlayer();
     }

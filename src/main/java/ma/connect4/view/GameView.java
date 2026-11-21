@@ -27,34 +27,61 @@ import ma.connect4.persistence.JsonGamePersistence;
 import java.io.IOException;
 import java.nio.file.Path;
 
+/**
+ * Interface graphique principale (JavaFX) du jeu.
+ *
+ * La vue est un {@link BorderPane} organisé en quatre zones :
+ * <ul>
+ *   <li>en haut : le titre ;</li>
+ *   <li>au centre : le plateau, avec une flèche par colonne pour jouer ;</li>
+ *   <li>à droite : le panneau de réglages et les boutons (nouvelle partie, aide, sauvegarde...) ;</li>
+ *   <li>en bas : la barre de messages.</li>
+ * </ul>
+ *
+ * La vue ne contient aucune règle du jeu : elle transmet les actions au
+ * {@link GameController} et affiche le résultat. Les erreurs (coup interdit, aide
+ * épuisée, fichier de sauvegarde invalide...) sont attrapées et affichées dans
+ * la barre de messages au lieu de faire planter l'application.
+ */
 public final class GameView extends BorderPane {
 
+    // Dimensions du plateau affiché (identiques à celles du modèle).
     private static final int ROWS = 6;
     private static final int COLUMNS = 7;
 
+    // Palette de couleurs de l'interface (thème sombre).
     private static final String BACKGROUND = "#0B1020";
     private static final String PANEL = "#151D33";
     private static final String CYAN = "#00E5FF";
     private static final String PURPLE = "#A855F7";
 
+    // Contrôleur : seul point d'accès à la logique du jeu.
     private final GameController controller;
 
+    // Éléments d'affichage : grille de cercles et zones de texte.
     private final GridPane boardGrid;
     private final Label statusLabel;
     private final Label playerLabel;
     private final Label hintsLabel;
     private final Label hintMessage;
 
+    // Listes déroulantes des réglages de la partie.
     private final ComboBox<GameConfig.GameMode> modeBox;
     private final ComboBox<GameConfig.SearchStrategyType> computerStrategyBox;
     private final ComboBox<GameConfig.SearchStrategyType> helpStrategyBox;
     private final ComboBox<Integer> depthBox;
     private final ComboBox<Integer> hintsBox;
 
+    // Une flèche par colonne ; elles sont désactivées quand la partie est finie.
     private final Button[] columnButtons = new Button[COLUMNS];
 
+    // Emplacement du fichier de sauvegarde (un seul fichier : une nouvelle sauvegarde remplace l'ancienne).
     private final Path savePath = Path.of("saves", "connect4-save.json");
 
+    /**
+     * Construit la fenêtre complète puis démarre une première partie
+     * avec les réglages par défaut.
+     */
     public GameView() {
 
         controller = new GameController();
@@ -72,19 +99,27 @@ public final class GameView extends BorderPane {
         depthBox = new ComboBox<>();
         hintsBox = new ComboBox<>();
 
+        // Remplit les listes déroulantes et choisit les valeurs par défaut.
         initializeControls();
 
         setStyle("-fx-background-color: " + BACKGROUND + ";");
         setPadding(new Insets(25));
 
+        // Assemblage des quatre zones de la fenêtre.
         setTop(createHeader());
         setCenter(createBoardPanel());
         setRight(createControlPanel());
         setBottom(createStatusPanel());
 
+        // Une partie est prête dès l'ouverture de la fenêtre.
         startNewGame();
     }
 
+    /**
+     * Remplit les listes déroulantes et fixe les valeurs par défaut :
+     * humain contre machine, Alpha-Bêta pour la machine, Minimax pour l'aide,
+     * profondeur 4 et 3 aides.
+     */
     private void initializeControls() {
 
         modeBox.getItems().addAll(GameConfig.GameMode.values());
@@ -117,6 +152,9 @@ public final class GameView extends BorderPane {
         configureComboBox(hintsBox);
     }
 
+    /**
+     * Applique le style commun aux listes déroulantes.
+     */
     private void configureComboBox(ComboBox<?> comboBox) {
         comboBox.setMaxWidth(Double.MAX_VALUE);
         comboBox.setStyle(
@@ -126,6 +164,9 @@ public final class GameView extends BorderPane {
         );
     }
 
+    /**
+     * Crée l'en-tête : titre et sous-titre.
+     */
     private VBox createHeader() {
 
         Label title = new Label("CONNECT 4");
@@ -149,6 +190,10 @@ public final class GameView extends BorderPane {
         return header;
     }
 
+    /**
+     * Crée la zone du plateau : une ligne de flèches (une par colonne)
+     * au-dessus d'une grille de 6 x 7 cercles.
+     */
     private VBox createBoardPanel() {
 
         Label boardTitle = new Label("GAME BOARD");
@@ -176,6 +221,7 @@ public final class GameView extends BorderPane {
                             "-fx-cursor: hand;"
             );
 
+            // Un clic sur la flèche joue dans cette colonne.
             button.setOnAction(event -> playColumn(selectedColumn));
 
             columnButtons[column] = button;
@@ -190,6 +236,7 @@ public final class GameView extends BorderPane {
         for (int row = 0; row < ROWS; row++) {
             for (int column = 0; column < COLUMNS; column++) {
 
+                // Chaque case est un cercle ; sa couleur est mise à jour par refreshBoard().
                 Circle disc = new Circle(25);
                 disc.setFill(Color.web("#26334F"));
                 disc.setStroke(Color.web("#344563"));
@@ -223,6 +270,10 @@ public final class GameView extends BorderPane {
         return boardContainer;
     }
 
+    /**
+     * Crée le panneau de droite : réglages (mode, stratégies, profondeur,
+     * nombre d'aides), boutons d'action et informations sur la partie.
+     */
     private VBox createControlPanel() {
 
         Label settingsTitle = new Label("GAME SETTINGS");
@@ -232,6 +283,7 @@ public final class GameView extends BorderPane {
                         "-fx-font-weight: bold;"
         );
 
+        // Boutons d'action ; chacun appelle la méthode correspondante ci-dessous.
         Button newGameButton = createButton("NEW GAME", PURPLE);
         newGameButton.setOnAction(event -> startNewGame());
 
@@ -305,6 +357,9 @@ public final class GameView extends BorderPane {
         return controls;
     }
 
+    /**
+     * Crée la barre de messages en bas de la fenêtre.
+     */
     private VBox createStatusPanel() {
 
         statusLabel.setWrapText(true);
@@ -329,6 +384,9 @@ public final class GameView extends BorderPane {
         return panel;
     }
 
+    /**
+     * Crée l'intitulé d'un réglage.
+     */
     private Label createFieldLabel(String text) {
         Label label = new Label(text);
         label.setStyle(
@@ -338,6 +396,9 @@ public final class GameView extends BorderPane {
         return label;
     }
 
+    /**
+     * Crée un bouton stylisé de la couleur demandée.
+     */
     private Button createButton(String text, String color) {
 
         Button button = new Button(text);
@@ -357,6 +418,10 @@ public final class GameView extends BorderPane {
         return button;
     }
 
+    /**
+     * Lance une nouvelle partie avec les réglages actuellement choisis.
+     * Si un réglage est invalide, le message d'erreur s'affiche et rien ne change.
+     */
     private void startNewGame() {
 
         try {
@@ -382,20 +447,32 @@ public final class GameView extends BorderPane {
         }
     }
 
+    /**
+     * Gère un clic sur une colonne : joue le coup humain, puis, en mode contre la
+     * machine, fait jouer la machine. Affiche ensuite le résultat si la partie est finie.
+     *
+     * Un coup interdit (colonne pleine...) déclenche une exception, attrapée en bas
+     * de la méthode : le message s'affiche dans la barre d'état et le jeu continue.
+     *
+     * @param column numéro de la colonne choisie (de 0 à 6)
+     */
     private void playColumn(int column) {
 
         try {
+            // Refus d'un coup si la partie est déjà terminée.
             if (controller.isGameFinished()) {
                 statusLabel.setText("The game is already finished.");
                 return;
             }
 
+            // 1) Coup du joueur humain.
             controller.playHumanMove(new Move(column));
 
             if (!controller.isGameFinished()
                     && controller.getGameConfig().mode()
                     == GameConfig.GameMode.HUMAN_VS_COMPUTER) {
 
+                // 2) Réponse immédiate de la machine (si la partie n'est pas finie).
                 controller.playComputerMove();
             }
 
@@ -422,6 +499,9 @@ public final class GameView extends BorderPane {
         }
     }
 
+    /**
+     * Affiche une boîte de dialogue annonçant la fin de la partie.
+     */
     private void showGameResult(String title, String message) {
 
         Alert alert = new Alert(Alert.AlertType.INFORMATION);
@@ -437,6 +517,10 @@ public final class GameView extends BorderPane {
         alert.showAndWait();
     }
 
+    /**
+     * Demande une aide au contrôleur et affiche la colonne conseillée
+     * (numérotée à partir de 1 pour le joueur). Consomme une des aides autorisées.
+     */
     private void showHint() {
 
         try {
@@ -455,6 +539,9 @@ public final class GameView extends BorderPane {
         }
     }
 
+    /**
+     * Recommence la partie avec les mêmes réglages.
+     */
     private void restartGame() {
 
         try {
@@ -470,6 +557,9 @@ public final class GameView extends BorderPane {
         }
     }
 
+    /**
+     * Sauvegarde la partie en cours dans le fichier JSON.
+     */
     private void saveGame() {
 
         try {
@@ -489,6 +579,10 @@ public final class GameView extends BorderPane {
         }
     }
 
+    /**
+     * Charge la partie sauvegardée. Si le fichier est absent ou invalide,
+     * un message est affiché et la partie en cours n'est pas modifiée.
+     */
     private void loadGame() {
 
         try {
@@ -523,6 +617,10 @@ public final class GameView extends BorderPane {
         }
     }
 
+    /**
+     * Redessine le plateau d'après l'état du moteur, met à jour le joueur courant,
+     * le nombre d'aides restantes, et désactive les flèches si la partie est finie.
+     */
     private void refreshBoard() {
 
         Board board = controller.getGameEngine().getBoard();
@@ -535,6 +633,7 @@ public final class GameView extends BorderPane {
 
                 Disc value = board.getCell(row, column);
 
+                // Couleur du cercle selon le contenu de la case.
                 switch (value) {
                     case RED -> disc.setFill(Color.web("#FF3864"));
                     case YELLOW -> disc.setFill(Color.web("#FFD43B"));
@@ -558,6 +657,11 @@ public final class GameView extends BorderPane {
         }
     }
 
+    /**
+     * Retrouve le composant graphique de la case (ligne, colonne) dans la grille.
+     *
+     * @throws IllegalStateException si la case n'existe pas
+     */
     private javafx.scene.Node getCell(int row, int column) {
 
         for (javafx.scene.Node node : boardGrid.getChildren()) {

@@ -15,41 +15,56 @@ import java.util.Objects;
 import java.util.Optional;
 
 /**
- * Controls the progression of a Connect Four game.
- * Supports saving and restoring games.
+ * Moteur de la partie : applique les coups, change de joueur et détecte la fin.
+ *
+ * Il gère aussi la sauvegarde et la restauration d'une partie. Il ne sait rien
+ * de l'interface ni de l'intelligence artificielle (voir {@code GameController}).
  */
 public final class GameEngine {
 
+    // État courant de la partie :
+    // la grille, le joueur dont c'est le tour, l'état (en cours / gagnée / nulle)
+    // et le nombre de coups déjà joués.
     private Board board;
     private Disc currentPlayer;
     private GameState gameState;
     private int moveCount;
 
+    /**
+     * Crée un moteur avec une partie neuve.
+     */
     public GameEngine() {
         reset();
     }
 
     /**
-     * Plays a move for the current player.
+     * Joue un coup pour le joueur courant.
      *
-     * @return the updated game state
+     * @param move le coup à jouer
+     * @return l'état de la partie après le coup
+     * @throws IllegalStateException    si la partie est déjà terminée
+     * @throws IllegalArgumentException si le coup est interdit (colonne pleine)
      */
     public GameState playMove(Move move) {
         Objects.requireNonNull(move, "Move cannot be null");
 
+        // Refus : on ne joue plus une fois la partie terminée.
         if (gameState.isFinished()) {
             throw new IllegalStateException("The game is already finished");
         }
 
+        // Refus : colonne pleine.
         if (!GameRules.isLegalMove(board, move)) {
             throw new IllegalArgumentException("Illegal move");
         }
 
+        // On mémorise qui joue : currentPlayer peut changer plus bas.
         Disc playedDisc = currentPlayer;
 
         int row = board.dropDisc(move.column(), playedDisc);
         moveCount++;
 
+        // Victoire, nul ou partie en cours ?
         gameState = GameRules.determineGameState(
                 board,
                 playedDisc,
@@ -57,6 +72,7 @@ public final class GameEngine {
                 move.column()
         );
 
+        // Le tour passe à l'adversaire seulement si la partie continue.
         if (!gameState.isFinished()) {
             currentPlayer = GameRules.getOpponent(currentPlayer);
         }
@@ -65,7 +81,7 @@ public final class GameEngine {
     }
 
     /**
-     * Resets the game to its initial state.
+     * Remet la partie à zéro : grille vide, le rouge commence.
      */
     public void reset() {
         board = new Board();
@@ -75,7 +91,11 @@ public final class GameEngine {
     }
 
     /**
-     * Saves the current game.
+     * Sauvegarde la partie en cours dans un fichier.
+     *
+     * @param persistence le mécanisme de sauvegarde (par exemple JSON)
+     * @param file        le fichier de destination
+     * @throws IOException en cas d'erreur d'écriture
      */
     public void saveGame(GamePersistence persistence, Path file)
             throws IOException {
@@ -83,6 +103,7 @@ public final class GameEngine {
         Objects.requireNonNull(persistence, "Persistence cannot be null");
         Objects.requireNonNull(file, "File cannot be null");
 
+        // On rassemble l'état de la partie dans un objet de sauvegarde.
         GameSave save = new GameSave(
                 board.toArray(),
                 currentPlayer,
@@ -95,9 +116,11 @@ public final class GameEngine {
     }
 
     /**
-     * Loads a saved game.
+     * Charge une partie sauvegardée.
      *
-     * @return true if a save was found and restored
+     * @return vrai si un fichier a été trouvé et la partie restaurée, faux si le fichier n'existe pas
+     * @throws IOException              en cas d'erreur de lecture
+     * @throws IllegalArgumentException si le contenu du fichier est incohérent
      */
     public boolean loadGame(GamePersistence persistence, Path file)
             throws IOException {
@@ -107,6 +130,7 @@ public final class GameEngine {
 
         Optional<GameSave> loadedSave = persistence.load(file);
 
+        // Pas de fichier de sauvegarde : rien n'est modifié.
         if (loadedSave.isEmpty()) {
             return false;
         }
@@ -116,7 +140,11 @@ public final class GameEngine {
     }
 
     /**
-     * Restores a game from saved data.
+     * Restaure une partie à partir de données sauvegardées.
+     *
+     * Le fichier n'est pas cru sur parole : la grille est reconstruite pion par pion,
+     * puis on vérifie sa cohérence (pas de pion en l'air, bon nombre de coups, état
+     * et joueur cohérents). Si une vérification échoue, la partie en cours est conservée.
      */
     public void restoreGame(GameSave save) {
         Objects.requireNonNull(save, "Save cannot be null");
@@ -126,9 +154,10 @@ public final class GameEngine {
 
         int actualMoveCount = 0;
 
-        // Rebuild each column from bottom to top.
+        // On reconstruit chaque colonne du bas vers le haut.
         for (int column = 0; column < Board.COLUMNS; column++) {
 
+            // Une fois une case vide trouvée, aucun pion ne doit se trouver plus haut.
             boolean emptyCellFound = false;
 
             for (int row = Board.ROWS - 1; row >= 0; row--) {
@@ -144,6 +173,7 @@ public final class GameEngine {
                 if (disc == Disc.EMPTY) {
                     emptyCellFound = true;
                 } else {
+                    // Pion au-dessus d'une case vide : impossible dans une vraie partie.
                     if (emptyCellFound) {
                         throw new IllegalArgumentException(
                                 "Invalid saved board: floating disc detected"
@@ -156,15 +186,17 @@ public final class GameEngine {
             }
         }
 
+        // Le nombre de pions sur la grille doit égaler le nombre de coups annoncé.
         if (actualMoveCount != save.moveCount()) {
             throw new IllegalArgumentException(
                     "Saved move count does not match the board"
             );
         }
 
+        // Vérifie la cohérence entre la grille, l'état annoncé et le joueur courant.
         validateSavedState(restoredBoard, save);
 
-        // Update the engine only after all validations succeed.
+        // On ne modifie le moteur qu'une fois toutes les vérifications réussies.
         this.board = restoredBoard;
         this.currentPlayer = save.currentPlayer();
         this.gameState = save.gameState();
@@ -172,10 +204,13 @@ public final class GameEngine {
     }
 
     /**
-     * Checks that the saved game state matches the board.
+     * Vérifie que l'état annoncé dans la sauvegarde correspond bien à la grille.
+     *
+     * @throws IllegalArgumentException si la sauvegarde est incohérente
      */
     private void validateSavedState(Board restoredBoard, GameSave save) {
 
+        // Qui a réellement un alignement de quatre sur la grille restaurée ?
         boolean redWon = WinDetector.hasWon(restoredBoard, Disc.RED);
         boolean yellowWon = WinDetector.hasWon(restoredBoard, Disc.YELLOW);
 
@@ -187,6 +222,9 @@ public final class GameEngine {
 
         switch (save.gameState()) {
 
+            // En cours : personne ne doit avoir gagné, la grille ne doit pas être pleine,
+            // et le joueur courant doit être celui prévu par la parité du nombre de coups
+            // (rouge si nombre pair, jaune si impair).
             case IN_PROGRESS -> {
                 if (redWon || yellowWon || restoredBoard.isFull()) {
                     throw new IllegalArgumentException(
@@ -205,6 +243,7 @@ public final class GameEngine {
                 }
             }
 
+            // Victoire annoncée : elle doit exister sur la grille, et être la seule.
             case RED_WON -> {
                 if (!redWon || yellowWon) {
                     throw new IllegalArgumentException(
@@ -221,6 +260,7 @@ public final class GameEngine {
                 }
             }
 
+            // Match nul annoncé : grille pleine et aucun gagnant.
             case DRAW -> {
                 if (!restoredBoard.isFull() || redWon || yellowWon) {
                     throw new IllegalArgumentException(
@@ -232,32 +272,51 @@ public final class GameEngine {
     }
 
     /**
-     * Returns a defensive copy of the board.
+     * Retourne une copie défensive de la grille : l'appelant ne peut pas modifier
+     * la grille interne du moteur.
      */
     public Board getBoard() {
         return board.copy();
     }
 
+    /**
+     * Joueur dont c'est le tour.
+     */
     public Disc getCurrentPlayer() {
         return currentPlayer;
     }
 
+    /**
+     * État actuel de la partie.
+     */
     public GameState getGameState() {
         return gameState;
     }
 
+    /**
+     * Nombre de coups déjà joués.
+     */
     public int getMoveCount() {
         return moveCount;
     }
 
+    /**
+     * Vrai si la partie est terminée.
+     */
     public boolean isFinished() {
         return gameState.isFinished();
     }
 
+    /**
+     * Vrai si la partie s'est terminée par un match nul.
+     */
     public boolean isDraw() {
         return gameState == GameState.DRAW;
     }
 
+    /**
+     * Vrai si la couleur donnée a gagné la partie.
+     */
     public boolean isWinning(Disc disc) {
         return switch (disc) {
             case RED -> gameState == GameState.RED_WON;
