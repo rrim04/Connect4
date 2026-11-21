@@ -593,6 +593,14 @@ public final class GameView extends BorderPane {
 
             if (loaded) {
                 hintMessage.setText("");
+
+                // Si la partie chargée en est à un tour de la machine (jaune), on la
+                // fait jouer tout de suite : sinon personne ne pourrait jouer et la
+                // partie resterait bloquée.
+                if (controller.isComputerTurn()) {
+                    controller.playComputerMove();
+                }
+
                 statusLabel.setText("Game loaded successfully.");
                 refreshBoard();
 

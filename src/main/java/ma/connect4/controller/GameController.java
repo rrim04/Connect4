@@ -155,6 +155,14 @@ public final class GameController {
             );
         }
 
+        // Pas d'aide pendant le tour de la machine : le conseil serait calculé
+        // pour la machine et non pour le joueur humain.
+        if (isComputerTurn()) {
+            throw new IllegalStateException(
+                    "Hints are unavailable during the computer's turn"
+            );
+        }
+
         if (hintsRemaining <= 0) {
             throw new IllegalStateException(
                     "No hints remaining"
@@ -253,5 +261,19 @@ public final class GameController {
      */
     public Disc getCurrentPlayer() {
         return gameEngine.getCurrentPlayer();
+    }
+
+    /**
+     * Vrai si c'est à la machine de jouer : mode humain contre machine,
+     * partie non terminée, et tour du jaune (la machine joue toujours le jaune).
+     *
+     * Sert à la vue pour savoir si la machine doit jouer, notamment après le
+     * chargement d'une partie sauvegardée au milieu d'un tour de la machine.
+     */
+    public boolean isComputerTurn() {
+        return gameConfig != null
+                && gameConfig.mode() == GameConfig.GameMode.HUMAN_VS_COMPUTER
+                && !gameEngine.isFinished()
+                && gameEngine.getCurrentPlayer() == Disc.YELLOW;
     }
 }
