@@ -2,7 +2,10 @@
 package ma.connect4;
 
 import javafx.application.Application;
+import javafx.geometry.Rectangle2D;
 import javafx.scene.Scene;
+import javafx.scene.control.ScrollPane;
+import javafx.stage.Screen;
 import javafx.stage.Stage;
 
 import ma.connect4.view.GameView;
@@ -27,14 +30,27 @@ public class Main extends Application {
         // Toute l'interface (plateau, réglages, boutons) est construite dans GameView.
         GameView gameView = new GameView();
 
-        // Scène de 1150 x 800 pixels dont le contenu est la vue du jeu.
-        Scene scene = new Scene(gameView, 1150, 800);
+        // Taille de la fenêtre adaptée à l'écran : sur un écran peu haut (portable),
+        // une fenêtre de 800 pixels dépasserait le bas de l'écran et cacherait la barre
+        // de messages ainsi que le texte de l'aide.
+        Rectangle2D screen = Screen.getPrimary().getVisualBounds();
+        double width = Math.min(1150, screen.getWidth());
+        double height = Math.min(800, screen.getHeight() - 40);   // marge pour la barre de titre
+
+        // La vue est placée dans un ScrollPane : si la fenêtre est plus petite que
+        // son contenu, des barres de défilement apparaissent au lieu de couper l'interface.
+        ScrollPane root = new ScrollPane(gameView);
+        root.setFitToWidth(true);
+        root.setFitToHeight(true);
+        root.setStyle("-fx-background: #0B1020; -fx-background-color: #0B1020;");
+
+        Scene scene = new Scene(root, width, height);
 
         stage.setTitle("Connect 4 - AI Arena");
         stage.setScene(scene);
-        // Tailles minimales : le plateau et le panneau de réglages doivent rester visibles.
-        stage.setMinWidth(1050);
-        stage.setMinHeight(750);
+        // Tailles minimales, limitées à la taille de l'écran.
+        stage.setMinWidth(Math.min(1050, screen.getWidth()));
+        stage.setMinHeight(Math.min(550, screen.getHeight() - 40));
         stage.setResizable(true);
 
         stage.show();

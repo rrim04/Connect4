@@ -336,7 +336,7 @@ public final class GameView extends BorderPane {
         );
 
         VBox controls = new VBox(
-                12,
+                8,
                 settingsTitle,
                 modeTitle,
                 modeBox,
@@ -350,12 +350,12 @@ public final class GameView extends BorderPane {
                 hintsBox,
                 newGameButton,
                 hintButton,
+                hintMessage,      // le texte de l'aide apparaît juste sous le bouton
                 restartButton,
                 saveButton,
                 loadButton,
                 playerLabel,
-                hintsLabel,
-                hintMessage
+                hintsLabel
         );
 
         controls.setPadding(new Insets(20));
