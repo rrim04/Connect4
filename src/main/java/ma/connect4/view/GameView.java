@@ -7,6 +7,7 @@ import javafx.scene.control.Alert;
 import javafx.scene.control.Button;
 import javafx.scene.control.ComboBox;
 import javafx.scene.control.Label;
+import javafx.scene.control.ListCell;
 import javafx.scene.layout.BorderPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.HBox;
@@ -155,13 +156,25 @@ public final class GameView extends BorderPane {
     /**
      * Applique le style commun aux listes déroulantes.
      */
-    private void configureComboBox(ComboBox<?> comboBox) {
+    private <T> void configureComboBox(ComboBox<T> comboBox) {
         comboBox.setMaxWidth(Double.MAX_VALUE);
         comboBox.setStyle(
                 "-fx-background-color: #222D49;" +
                         "-fx-text-fill: white;" +
                         "-fx-font-size: 13px;"
         );
+
+        // La valeur choisie est dessinée par une « cellule » interne qui ignore
+        // -fx-text-fill du ComboBox (le texte restait gris foncé sur fond sombre).
+        // On la remplace par une cellule qui affiche le texte en blanc.
+        comboBox.setButtonCell(new ListCell<T>() {
+            @Override
+            protected void updateItem(T item, boolean empty) {
+                super.updateItem(item, empty);
+                setText(empty || item == null ? null : item.toString());
+                setTextFill(Color.WHITE);
+            }
+        });
     }
 
     /**
