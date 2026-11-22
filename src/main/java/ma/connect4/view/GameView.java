@@ -563,7 +563,8 @@ public final class GameView extends BorderPane {
     private void saveGame() {
 
         try {
-            controller.getGameEngine().saveGame(
+            // Sauvegarde complète : grille, réglages et aides restantes.
+            controller.saveGame(
                     new JsonGamePersistence(),
                     savePath
             );
@@ -586,13 +587,16 @@ public final class GameView extends BorderPane {
     private void loadGame() {
 
         try {
-            boolean loaded = controller.getGameEngine().loadGame(
+            boolean loaded = controller.loadGame(
                     new JsonGamePersistence(),
                     savePath
             );
 
             if (loaded) {
                 hintMessage.setText("");
+
+                // Les réglages de la partie chargée remplacent ceux affichés à l'écran.
+                showConfigInControls();
 
                 // Si la partie chargée en est à un tour de la machine (jaune), on la
                 // fait jouer tout de suite : sinon personne ne pourrait jouer et la
@@ -623,6 +627,32 @@ public final class GameView extends BorderPane {
                     "Load failed: " + exception.getMessage()
             );
         }
+    }
+
+    /**
+     * Affiche dans les listes déroulantes les réglages de la partie en cours
+     * (utile après un chargement : ils viennent alors du fichier de sauvegarde).
+     */
+    private void showConfigInControls() {
+        GameConfig config = controller.getGameConfig();
+
+        modeBox.setValue(config.mode());
+        computerStrategyBox.setValue(config.computerStrategy());
+        helpStrategyBox.setValue(config.helpStrategy());
+        selectValue(depthBox, config.searchDepth());
+        selectValue(hintsBox, config.maxHints());
+    }
+
+    /**
+     * Sélectionne une valeur dans une liste de nombres ; si elle n'y figure pas
+     * (par exemple un ancien fichier avec une autre profondeur), on l'ajoute.
+     */
+    private void selectValue(ComboBox<Integer> box, int value) {
+        if (!box.getItems().contains(value)) {
+            box.getItems().add(value);
+            box.getItems().sort(Integer::compare);
+        }
+        box.setValue(value);
     }
 
     /**

@@ -2,12 +2,14 @@
 package ma.connect4.persistence;
 
 import ma.connect4.model.Disc;
+import ma.connect4.model.GameConfig;
 import ma.connect4.model.GameState;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.time.LocalDateTime;
 import java.util.Optional;
@@ -90,6 +92,58 @@ class JsonGamePersistenceTest {
 
         assertTrue(file.toFile().exists());
         assertTrue(persistence.load(file).isPresent());
+    }
+
+    @Test
+    void shouldSaveAndLoadConfigurationAndRemainingHints() throws IOException {
+        GameConfig config = new GameConfig(
+                GameConfig.GameMode.HUMAN_VS_COMPUTER,
+                GameConfig.SearchStrategyType.ALPHA_BETA,
+                GameConfig.SearchStrategyType.MINIMAX,
+                5,
+                3
+        );
+
+        GameSave original = new GameSave(
+                createEmptyBoard(),
+                Disc.RED,
+                GameState.IN_PROGRESS,
+                0,
+                LocalDateTime.now().withNano(0),
+                config,
+                2
+        );
+
+        Path file = tempDirectory.resolve("full-save.json");
+
+        persistence.save(original, file);
+
+        GameSave restored = persistence.load(file).orElseThrow();
+
+        assertEquals(config, restored.config());
+        assertEquals(2, restored.hintsRemaining());
+    }
+
+    @Test
+    void shouldLoadOldSaveFileWithoutConfiguration() throws IOException {
+        // Fichier au format d'avant : aucun champ « config » ni « hintsRemaining ».
+        String emptyRow = "[\"EMPTY\",\"EMPTY\",\"EMPTY\",\"EMPTY\",\"EMPTY\",\"EMPTY\",\"EMPTY\"]";
+        String board = "[" + String.join(",", java.util.Collections.nCopies(6, emptyRow)) + "]";
+
+        String json = "{\"board\":" + board + ","
+                + "\"currentPlayer\":\"RED\","
+                + "\"gameState\":\"IN_PROGRESS\","
+                + "\"moveCount\":0,"
+                + "\"savedAt\":\"2026-11-21T14:00:00\"}";
+
+        Path file = tempDirectory.resolve("old-save.json");
+        Files.writeString(file, json);
+
+        GameSave restored = persistence.load(file).orElseThrow();
+
+        assertNull(restored.config());
+        assertEquals(0, restored.hintsRemaining());
+        assertEquals(Disc.RED, restored.currentPlayer());
     }
 
     private Disc[][] createEmptyBoard() {

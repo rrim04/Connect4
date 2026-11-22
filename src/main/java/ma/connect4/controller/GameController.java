@@ -10,8 +10,14 @@ import ma.connect4.model.Disc;
 import ma.connect4.model.GameConfig;
 import ma.connect4.model.GameState;
 import ma.connect4.model.Move;
+import ma.connect4.persistence.GamePersistence;
+import ma.connect4.persistence.GameSave;
 
+import java.io.IOException;
+import java.nio.file.Path;
+import java.time.LocalDateTime;
 import java.util.Objects;
+import java.util.Optional;
 
 /**
  * Chef d'orchestre de la partie : relie le moteur de jeu, l'intelligence
@@ -196,6 +202,85 @@ public final class GameController {
 
         gameEngine.reset();
         hintsRemaining = gameConfig.maxHints();
+    }
+
+    /**
+     * Sauvegarde la partie COMPLÈTE : la grille, le joueur courant, l'état,
+     * mais aussi les réglages (mode, stratégies, profondeur) et les aides restantes.
+     *
+     * @param persistence le mécanisme de sauvegarde (par exemple JSON)
+     * @param file        le fichier de destination
+     * @throws IllegalStateException si aucune partie n'est lancée
+     * @throws IOException           en cas d'erreur d'écriture
+     */
+    public void saveGame(GamePersistence persistence, Path file)
+            throws IOException {
+
+        Objects.requireNonNull(persistence, "Persistence cannot be null");
+        Objects.requireNonNull(file, "File cannot be null");
+        ensureGameStarted();
+
+        GameSave save = new GameSave(
+                gameEngine.getBoard().toArray(),
+                gameEngine.getCurrentPlayer(),
+                gameEngine.getGameState(),
+                gameEngine.getMoveCount(),
+                LocalDateTime.now(),
+                gameConfig,
+                hintsRemaining
+        );
+
+        persistence.save(save, file);
+    }
+
+    /**
+     * Charge une partie sauvegardée : la grille ET, si le fichier les contient,
+     * les réglages et les aides restantes.
+     *
+     * Si la sauvegarde est invalide ou incohérente, une exception est lancée
+     * et la partie en cours n'est pas modifiée. Une ancienne sauvegarde sans
+     * réglages est acceptée : on garde alors les réglages et les aides actuels.
+     *
+     * @return vrai si une sauvegarde a été trouvée et restaurée, faux si le fichier n'existe pas
+     * @throws IOException           en cas d'erreur de lecture
+     * @throws IllegalStateException si l'ancienne sauvegarde n'a pas de réglages
+     *                               et qu'aucune partie n'est lancée
+     * @throws IllegalArgumentException si le contenu du fichier est incohérent
+     */
+    public boolean loadGame(GamePersistence persistence, Path file)
+            throws IOException {
+
+        Objects.requireNonNull(persistence, "Persistence cannot be null");
+        Objects.requireNonNull(file, "File cannot be null");
+
+        Optional<GameSave> loadedSave = persistence.load(file);
+
+        // Pas de fichier de sauvegarde : rien n'est modifié.
+        if (loadedSave.isEmpty()) {
+            return false;
+        }
+
+        GameSave save = loadedSave.get();
+
+        // Ancienne sauvegarde sans réglages : il faut déjà avoir des réglages
+        // (donc une partie lancée) pour pouvoir continuer à jouer.
+        if (save.config() == null) {
+            ensureGameStarted();
+        }
+
+        // Vérifie la cohérence et restaure la grille. En cas de problème, une
+        // exception est lancée ICI, avant que les réglages ne soient modifiés.
+        gameEngine.restoreGame(save);
+
+        // La grille est valide : on adopte aussi les réglages sauvegardés.
+        if (save.config() != null) {
+            this.gameConfig = save.config();
+            this.computerStrategy = createStrategy(save.config().computerStrategy());
+            this.helpStrategy = createStrategy(save.config().helpStrategy());
+            this.hintsRemaining = save.hintsRemaining();
+        }
+
+        return true;
     }
 
     /**

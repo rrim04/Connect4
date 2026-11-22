@@ -1,7 +1,9 @@
 
 package ma.connect4.persistence;
 
+import com.fasterxml.jackson.annotation.JsonCreator;
 import ma.connect4.model.Disc;
+import ma.connect4.model.GameConfig;
 import ma.connect4.model.GameState;
 
 import java.time.LocalDateTime;
@@ -15,16 +17,34 @@ import java.util.Objects;
  * @param gameState     l'état de la partie (en cours, gagnée, nulle)
  * @param moveCount     le nombre de coups joués (entre 0 et 42)
  * @param savedAt       la date et l'heure de la sauvegarde
+ * @param config        les réglages de la partie (mode, stratégies, profondeur, aides) ;
+ *                      null dans les anciennes sauvegardes qui ne les contenaient pas
+ * @param hintsRemaining le nombre d'aides encore disponibles (0 si {@code config} est null)
  */
 public record GameSave(
         Disc[][] board,
         Disc currentPlayer,
         GameState gameState,
         int moveCount,
-        LocalDateTime savedAt
+        LocalDateTime savedAt,
+        GameConfig config,
+        int hintsRemaining
 ) {
+    /**
+     * Constructeur « ancien format » : sauvegarde sans réglages.
+     * Il sert aux anciennes sauvegardes et garde le code existant compatible.
+     */
+    public GameSave(Disc[][] board,
+                    Disc currentPlayer,
+                    GameState gameState,
+                    int moveCount,
+                    LocalDateTime savedAt) {
+        this(board, currentPlayer, gameState, moveCount, savedAt, null, 0);
+    }
+
     // Constructeur compact : vérifie les données et fait une copie de la grille,
     // pour que la sauvegarde ne change plus si le tableau d'origine est modifié.
+    @JsonCreator
     public GameSave {
         Objects.requireNonNull(board, "Board cannot be null");
         Objects.requireNonNull(currentPlayer, "Current player cannot be null");
@@ -57,6 +77,13 @@ public record GameSave(
         // 6 x 7 = 42 cases : on ne peut pas avoir joué plus de 42 coups.
         if (moveCount < 0 || moveCount > 42) {
             throw new IllegalArgumentException("Invalid move count");
+        }
+
+        // Les aides restantes ne peuvent pas dépasser le maximum des réglages.
+        // (config peut valoir null pour une ancienne sauvegarde.)
+        if (hintsRemaining < 0
+                || (config != null && hintsRemaining > config.maxHints())) {
+            throw new IllegalArgumentException("Invalid number of remaining hints");
         }
 
         board = copy;
